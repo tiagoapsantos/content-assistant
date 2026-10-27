@@ -1,0 +1,9 @@
+import { emptySnapshot } from './config.js';
+import { parseBackup,validateSnapshot } from './validation.js';
+export const PRIMARY='pauta.content.v1',PREVIOUS='pauta.content.v1.previous',CORRUPT='pauta.content.v1.corrupt';
+export function createRepository(storage){let lastRaw=null,locked=false;return {
+ load(){try{if(!storage)throw new Error('Armazenamento indisponível.');lastRaw=storage.getItem(PRIMARY);if(lastRaw===null)return {snapshot:emptySnapshot(),mode:'ready'};try{return {snapshot:parseBackup(lastRaw),mode:'ready'};}catch{locked=true;const previous=storage.getItem(PREVIOUS);if(previous){try{return {snapshot:parseBackup(previous),mode:'recovered'};}catch{}}return {snapshot:emptySnapshot(),mode:'corrupt'};}}catch{locked=true;return {snapshot:emptySnapshot(),mode:'unavailable'};}},
+ save(snapshot){validateSnapshot(snapshot);if(locked||!storage)throw new Error('A gravação local está bloqueada. Exporte um backup ou recupere os dados.');const current=storage.getItem(PRIMARY);if(current!==lastRaw){locked=true;throw new Error('Outra janela alterou a biblioteca. Exporte o trabalho desta sessão e recarregue antes de continuar.');}if(current!==null){parseBackup(current);storage.setItem(PREVIOUS,current);}const next=JSON.stringify(snapshot);storage.setItem(PRIMARY,next);lastRaw=next;},
+ recover(){if(!storage)throw new Error('Armazenamento indisponível.');const raw=storage.getItem(PREVIOUS);if(!raw)throw new Error('Não existe cópia anterior.');const value=parseBackup(raw);const current=storage.getItem(PRIMARY);if(current!==null)storage.setItem(CORRUPT,current);storage.setItem(PRIMARY,raw);lastRaw=raw;locked=false;return value;},
+ clear(){if(!storage)throw new Error('Armazenamento indisponível.');for(const key of [PRIMARY,PREVIOUS,CORRUPT])storage.removeItem(key);lastRaw=null;locked=false;},
+};}
